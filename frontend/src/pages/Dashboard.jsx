@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import {
   getHouseholds,
+  createHousehold,
   getConsumption,
   getAnalytics,
 } from '../services/api'
@@ -36,6 +37,10 @@ function Dashboard() {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [householdName, setHouseholdName] = useState('')
+  const [householdSize, setHouseholdSize] = useState('1')
+  const [registering, setRegistering] = useState(false)
+  const [registrationError, setRegistrationError] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -104,6 +109,43 @@ function Dashboard() {
     }
   }, [])
 
+// Register a new household
+async function handleHouseholdRegistration(event) {
+  event.preventDefault()
+
+  setRegistrationError('')
+
+  const size = Number(householdSize)
+
+  if (!Number.isInteger(size) || size <= 0) {
+    setRegistrationError('Please enter a valid household size.')
+    return
+  }
+
+  try {
+    setRegistering(true)
+
+    await createHousehold({
+      household_name: householdName.trim(),
+      household_size: size,
+    })
+
+    // Clear the registration form
+    setHouseholdName('')
+    setHouseholdSize('1')
+
+    // Reload the page to fetch the newly registered household
+    window.location.reload()
+
+  } catch (err) {
+    setRegistrationError(
+      err.message || 'Unable to register household.'
+    )
+  } finally {
+    setRegistering(false)
+  }
+}
+
   // Loading state
   if (loading) {
     return (
@@ -115,23 +157,89 @@ function Dashboard() {
     )
   }
 
-  // Error state
-  if (error) {
-    return (
-      <div className="page-content">
-        <div className="page-heading">
+ 
+// Error state
+if (error) {
+  return (
+    <div className="page-content">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">GET STARTED</p>
+          <h1>Register your household</h1>
+          <p className="page-description">
+            Add your household to begin monitoring and managing
+            daily water consumption.
+          </p>
+        </div>
+      </div>
+
+      <section className="panel">
+        <div className="panel-heading">
           <div>
-            <p className="eyebrow">OVERVIEW</p>
-            <h1>Water consumption dashboard</h1>
+            <h2>Household registration</h2>
+            <p>Enter your household details below.</p>
           </div>
         </div>
 
-        <div className="form-alert error-alert">
-          {error}
-        </div>
-      </div>
-    )
-  }
+        {error === 'No household has been registered yet.' ? (
+          <p className="page-description">
+            No household is registered in the database yet.
+          </p>
+        ) : (
+          <div className="form-alert error-alert">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleHouseholdRegistration}>
+          <div className="form-field">
+            <label htmlFor="householdName">
+              Household name
+            </label>
+            <input
+              id="householdName"
+              type="text"
+              placeholder="e.g. Adrija's Household"
+              value={householdName}
+              onChange={(event) => setHouseholdName(event.target.value)}
+              maxLength={100}
+            />
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="householdSize">
+              Number of household members
+            </label>
+            <input
+              id="householdSize"
+              type="number"
+              min="1"
+              step="1"
+              required
+              value={householdSize}
+              onChange={(event) => setHouseholdSize(event.target.value)}
+            />
+          </div>
+
+          {registrationError && (
+            <div className="form-alert error-alert">
+              {registrationError}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="submit-button"
+            disabled={registering}
+          >
+            {registering ? 'Registering...' : 'Register Household'}
+          </button>
+        </form>
+      </section>
+    </div>
+  )
+}
+
 
   // 5. Identify the latest record
   const latestRecord =

@@ -32,6 +32,14 @@ export function getHouseholds() {
   return apiRequest('/households');
 }
 
+// Register a new household
+export function createHousehold(data) {
+  return apiRequest('/households', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 // Retrieve household consumption records
 export function getConsumption(householdId) {
   return apiRequest(`/consumption/${householdId}`);
