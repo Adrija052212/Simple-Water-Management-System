@@ -38,17 +38,3 @@ def health():
         "application": "Water Consumption Management System"
     })
 
-@app.route("/debug/routes", methods=["GET"])
-def debug_routes():
-    return jsonify({
-        "routes": [
-            {
-                "path": rule.rule,
-                "methods": list(rule.methods)
-            }
-            for rule in app.url_map.iter_rules()
-        ]
-    })
-
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
