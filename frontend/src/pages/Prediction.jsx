@@ -1,6 +1,7 @@
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { predictConsumption } from '../services/api'
+import { useHousehold } from '../context/HouseholdContext'
 
 const initialForm = {
   Household_Size: '4',
@@ -18,6 +19,13 @@ const activityConfig = [
 ]
 
 function Prediction() {
+  const {
+    household,
+    householdId,
+    loadingHousehold,
+    householdError,
+  } = useHousehold()
+
   const [form, setForm] = useState(initialForm)
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -27,10 +35,21 @@ function Prediction() {
   const householdSize = Number(form.Household_Size)
   const bathingEvents = Number(form.Bathing_Events)
 
+  // Automatically use the registered household size
+  useEffect(() => {
+    if (household) {
+      setForm(previous => ({
+        ...previous,
+        Household_Size: String(household.household_size),
+        Bathing_Events: String(household.household_size),
+      }))
+    }
+  }, [household])
+
   function handleChange(event) {
     const { name, value } = event.target
 
-    setForm((previous) => ({
+    setForm(previous => ({
       ...previous,
       [name]: value,
     }))
@@ -68,12 +87,18 @@ function Prediction() {
       return 'Household size must be between 1 and 6.'
     }
 
+    if (household && householdSize !== Number(household.household_size)) {
+      return 'Household size must match your registered household.'
+    }
+
     if (bathingEvents > householdSize) {
       return 'Bathing events cannot exceed household size.'
     }
 
-    if (Number(form.Kitchen_Sessions) < 2 ||
-        Number(form.Kitchen_Sessions) > 4) {
+    if (
+      Number(form.Kitchen_Sessions) < 2 ||
+      Number(form.Kitchen_Sessions) > 4
+    ) {
       return 'Kitchen sessions must be between 2 and 4, matching the training data.'
     }
 
@@ -127,6 +152,7 @@ function Prediction() {
 
       setResult(response.predicted_consumption)
       setPredictionTime(new Date())
+
     } catch (err) {
       setError(err.message || 'Unable to generate prediction.')
     } finally {
@@ -135,7 +161,7 @@ function Prediction() {
   }
 
   const activities = result
-    ? activityConfig.map((activity) => ({
+    ? activityConfig.map(activity => ({
         ...activity,
         value: Number(result[activity.key]) || 0,
       }))
@@ -143,8 +169,32 @@ function Prediction() {
 
   const total = Number(result?.total_liters) || 0
 
+  // Wait for household information
+  if (loadingHousehold) {
+    return (
+      <div className="page-content">
+        <p className="empty-state">
+          Loading household information...
+        </p>
+      </div>
+    )
+  }
+
+  // Handle missing household
+  if (!householdId) {
+    return (
+      <div className="page-content">
+        <div className="form-alert error-alert">
+          {householdError ||
+            'Please register a household from the Dashboard first.'}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="page-content">
+
       <div className="page-heading">
         <div>
           <p className="eyebrow">WORKSPACE / PREDICTION</p>
@@ -158,6 +208,7 @@ function Prediction() {
       </div>
 
       <section className="panel prediction-panel">
+
         <div className="panel-heading">
           <div>
             <h2>Household activity details</h2>
@@ -166,7 +217,9 @@ function Prediction() {
         </div>
 
         <form onSubmit={handleSubmit}>
+
           <div className="prediction-form-grid">
+
             <div className="form-field">
               <label htmlFor="Household_Size">Household size</label>
               <input
@@ -177,10 +230,12 @@ function Prediction() {
                 max="6"
                 step="1"
                 value={form.Household_Size}
-                onChange={handleChange}
+                readOnly
                 required
               />
-              <small>Allowed range: 1–6 members</small>
+              <small>
+                Automatically taken from your registered household
+              </small>
             </div>
 
             <div className="form-field">
@@ -244,17 +299,20 @@ function Prediction() {
                 step="1"
                 value={form.Gardening_Duration_Minutes}
                 onChange={handleChange}
-                onBlur={(event) => {
-                    const value = Number(event.target.value)
+                onBlur={event => {
+                  const value = Number(event.target.value)
 
-                    if (value > 0 && value < 10) {
-                    setError('Gardening duration must be 0 or between 10 and 60 minutes.')
-                    }
+                  if (value > 0 && value < 10) {
+                    setError(
+                      'Gardening duration must be 0 or between 10 and 60 minutes.'
+                    )
+                  }
                 }}
                 required
               />
               <small>Enter 0 or a duration between 10–60 minutes</small>
             </div>
+
           </div>
 
           {error && (
@@ -272,11 +330,13 @@ function Prediction() {
               ? 'Predicting consumption...'
               : 'Predict water consumption'}
           </button>
+
         </form>
       </section>
 
       {result && (
         <section className="panel prediction-result">
+
           <div className="panel-heading">
             <div>
               <h2>Prediction results</h2>
@@ -296,7 +356,8 @@ function Prediction() {
           </div>
 
           <div className="prediction-breakdown">
-            {activities.map((activity) => {
+
+            {activities.map(activity => {
               const percentage = total > 0
                 ? (activity.value / total) * 100
                 : 0
@@ -328,6 +389,7 @@ function Prediction() {
                 </div>
               )
             })}
+
           </div>
 
           <div className="dashboard-note">
@@ -336,8 +398,10 @@ function Prediction() {
             model-based estimation and should not be interpreted as
             validated real-world measurements.
           </div>
+
         </section>
       )}
+
     </div>
   )
 }

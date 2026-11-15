@@ -1,8 +1,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { addConsumption, getConsumption } from '../services/api'
-
-const HOUSEHOLD_ID = 1
+import { useHousehold } from '../context/HouseholdContext'
 
 // Get the current date in local timezone (YYYY-MM-DD)
 function getLocalDate() {
@@ -42,6 +41,12 @@ function Consumption() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
+  const {
+    householdId,
+    loadingHousehold,
+    householdError,
+  } = useHousehold()
+
   // Calculate total consumption dynamically
   const total = activities.reduce(
     (sum, activity) =>
@@ -51,22 +56,44 @@ function Consumption() {
 
   // Fetch consumption records from Flask backend
   const loadRecords = useCallback(async () => {
+    if (!householdId) return
+
     setLoading(true)
+    setError('')
 
     try {
-      const result = await getConsumption(HOUSEHOLD_ID)
-      setRecords(result.records)
+      const result = await getConsumption(householdId)
+      setRecords(result.records || [])
     } catch (err) {
       setError(err.message || 'Unable to load consumption records.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [householdId])
 
-  // Load records when the component first renders
+  // Load records when household information is available
   useEffect(() => {
+    if (loadingHousehold) return
+
+    if (householdError) {
+      setError(householdError)
+      setLoading(false)
+      return
+    }
+
+    if (!householdId) {
+      setRecords([])
+      setLoading(false)
+      return
+    }
+
     loadRecords()
-  }, [loadRecords])
+  }, [
+    loadingHousehold,
+    householdError,
+    householdId,
+    loadRecords,
+  ])
 
   // Handle input changes
   function handleChange(event) {
@@ -85,13 +112,18 @@ function Consumption() {
   async function handleSubmit(event) {
     event.preventDefault()
 
+    if (!householdId) {
+      setError('Please register a household first.')
+      return
+    }
+
     setSaving(true)
     setError('')
     setMessage('')
 
     try {
       const payload = {
-        household_id: HOUSEHOLD_ID,
+        household_id: householdId,
         record_date: form.record_date,
         bathroom_liters: Number(form.bathroom_liters),
         kitchen_liters: Number(form.kitchen_liters),
@@ -120,6 +152,29 @@ function Consumption() {
     }
   }
 
+  // Wait until household information is loaded
+  if (loadingHousehold) {
+    return (
+      <div className="page-content">
+        <p className="empty-state">
+          Loading household information...
+        </p>
+      </div>
+    )
+  }
+
+  // Handle missing household
+  if (!householdId) {
+    return (
+      <div className="page-content">
+        <div className="form-alert error-alert">
+          {householdError ||
+            'Please register a household from the Dashboard first.'}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="page-content">
 
@@ -136,7 +191,7 @@ function Consumption() {
         </div>
 
         <span className="sample-badge">
-          HOUSEHOLD #{HOUSEHOLD_ID}
+          HOUSEHOLD #{householdId}
         </span>
       </div>
 
@@ -232,7 +287,7 @@ function Consumption() {
           <button
             className="submit-button"
             type="submit"
-            disabled={saving}
+            disabled={saving || loading}
           >
             {saving
               ? 'Saving record...'
@@ -298,13 +353,21 @@ function Consumption() {
 
                     <td>{record.record_date}</td>
 
-                    <td>{Number(record.bathroom_liters).toFixed(2)} L</td>
+                    <td>
+                      {Number(record.bathroom_liters).toFixed(2)} L
+                    </td>
 
-                    <td>{Number(record.kitchen_liters).toFixed(2)} L</td>
+                    <td>
+                      {Number(record.kitchen_liters).toFixed(2)} L
+                    </td>
 
-                    <td>{Number(record.laundry_liters).toFixed(2)} L</td>
+                    <td>
+                      {Number(record.laundry_liters).toFixed(2)} L
+                    </td>
 
-                    <td>{Number(record.gardening_liters).toFixed(2)} L</td>
+                    <td>
+                      {Number(record.gardening_liters).toFixed(2)} L
+                    </td>
 
                     <td className="table-total">
                       {Number(record.total_liters).toFixed(2)} L

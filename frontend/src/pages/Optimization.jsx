@@ -1,6 +1,7 @@
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { recommendConsumption } from '../services/api'
+import { useHousehold } from '../context/HouseholdContext'
 
 const initialForm = {
   Household_Size: 4,
@@ -19,15 +20,33 @@ const activityColors = {
 }
 
 function Optimization() {
+  const {
+    household,
+    householdId,
+    loadingHousehold,
+    householdError,
+  } = useHousehold()
+
   const [form, setForm] = useState(initialForm)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Automatically use the registered household size
+  useEffect(() => {
+    if (household) {
+      setForm(previous => ({
+        ...previous,
+        Household_Size: Number(household.household_size),
+        Bathing_Events: Number(household.household_size),
+      }))
+    }
+  }, [household])
+
   function handleChange(event) {
     const { name, value } = event.target
 
-    setForm((previous) => ({
+    setForm(previous => ({
       ...previous,
       [name]: value,
     }))
@@ -36,11 +55,92 @@ function Optimization() {
     setError('')
   }
 
+  function validateForm() {
+    const fields = [
+      'Household_Size',
+      'Bathing_Events',
+      'Kitchen_Sessions',
+      'Laundry_Loads',
+      'Gardening_Duration_Minutes',
+      'available_budget_liters',
+    ]
+
+    for (const field of fields) {
+      const value = form[field]
+
+      if (value === '' || !Number.isFinite(Number(value))) {
+        return `${field.replaceAll('_', ' ')} is required.`
+      }
+
+      if (Number(value) < 0) {
+        return 'Input values cannot be negative.'
+      }
+    }
+
+    const householdSize = Number(form.Household_Size)
+    const bathingEvents = Number(form.Bathing_Events)
+    const kitchenSessions = Number(form.Kitchen_Sessions)
+    const laundryLoads = Number(form.Laundry_Loads)
+    const gardening = Number(form.Gardening_Duration_Minutes)
+
+    if (
+      !Number.isInteger(householdSize) ||
+      householdSize < 1 ||
+      householdSize > 6
+    ) {
+      return 'Household size must be between 1 and 6.'
+    }
+
+    if (household && householdSize !== Number(household.household_size)) {
+      return 'Household size must match your registered household.'
+    }
+
+    if (!Number.isInteger(bathingEvents) || bathingEvents > householdSize) {
+      return 'Bathing events must be whole numbers and cannot exceed household size.'
+    }
+
+    if (
+      !Number.isInteger(kitchenSessions) ||
+      kitchenSessions < 2 ||
+      kitchenSessions > 4
+    ) {
+      return 'Kitchen sessions must be between 2 and 4.'
+    }
+
+    if (
+      !Number.isInteger(laundryLoads) ||
+      laundryLoads > 3
+    ) {
+      return 'Laundry loads must be between 0 and 3.'
+    }
+
+    if (
+      !Number.isInteger(gardening) ||
+      (
+        gardening !== 0 &&
+        (gardening < 10 || gardening > 60)
+      )
+    ) {
+      return 'Gardening duration must be 0 or between 10 and 60 minutes.'
+    }
+
+    return null
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
-    setLoading(true)
+
     setError('')
     setResult(null)
+
+    const validationError = validateForm()
+
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    setLoading(true)
 
     try {
       const payload = {
@@ -58,11 +158,12 @@ function Optimization() {
 
       const response = await recommendConsumption(payload)
       setResult(response)
+
     } catch (err) {
       if (err.data?.optimization) {
         setResult(err.data)
       } else {
-        setError(err.message)
+        setError(err.message || 'Unable to optimize water allocation.')
       }
     } finally {
       setLoading(false)
@@ -74,6 +175,29 @@ function Optimization() {
 
   const conservationData = result?.conservation_recommendations
   const recommendations = conservationData?.recommendations || []
+
+  // Wait for household information
+  if (loadingHousehold) {
+    return (
+      <div className="page-content">
+        <p className="empty-state">
+          Loading household information...
+        </p>
+      </div>
+    )
+  }
+
+  // Handle missing household
+  if (!householdId) {
+    return (
+      <div className="page-content">
+        <div className="form-alert error-alert">
+          {householdError ||
+            'Please register a household from the Dashboard first.'}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="page-content">
@@ -96,6 +220,7 @@ function Optimization() {
 
       {/* INPUT FORM */}
       <section className="panel optimization-input-panel">
+
         <div className="panel-heading">
           <div>
             <h2>Household requirements</h2>
@@ -106,6 +231,7 @@ function Optimization() {
         </div>
 
         <form onSubmit={handleSubmit}>
+
           <div className="optimization-form-grid">
 
             <div className="form-field">
@@ -118,9 +244,12 @@ function Optimization() {
                 max="6"
                 step="1"
                 value={form.Household_Size}
-                onChange={handleChange}
+                readOnly
                 required
               />
+              <small>
+                Automatically taken from your registered household
+              </small>
             </div>
 
             <div className="form-field">
@@ -218,6 +347,7 @@ function Optimization() {
               ? 'Optimizing allocation...'
               : 'Predict and optimize water'}
           </button>
+
         </form>
       </section>
 
@@ -410,7 +540,7 @@ function Optimization() {
               {recommendations.length > 0 ? (
                 <div className="recommendation-list">
 
-                  {recommendations.map((item) => (
+                  {recommendations.map(item => (
                     <article
                       className="recommendation-card"
                       key={item.activity}

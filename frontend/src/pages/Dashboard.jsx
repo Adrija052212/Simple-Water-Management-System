@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from 'react'
+import { useHousehold } from '../context/HouseholdContext'
 import {
-  getHouseholds,
   createHousehold,
   getConsumption,
   getAnalytics,
@@ -32,7 +32,12 @@ function formatActivityName(activity) {
 }
 
 function Dashboard() {
-  const [household, setHousehold] = useState(null)
+  const {
+  household,
+  loadingHousehold,
+  householdError,
+  refreshHousehold,
+  } = useHousehold()
   const [analytics, setAnalytics] = useState(null)
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -42,74 +47,69 @@ function Dashboard() {
   const [registering, setRegistering] = useState(false)
   const [registrationError, setRegistrationError] = useState('')
 
-  useEffect(() => {
-    let isMounted = true
+useEffect(() => {
+  if (loadingHousehold) return
 
-    async function loadDashboard() {
-      try {
-        setLoading(true)
-        setError('')
+  if (householdError) {
+    setError(householdError)
+    setLoading(false)
+    return
+  }
 
-        // 1. Retrieve registered households
-        const householdResponse = await getHouseholds()
-        const households = householdResponse.households || []
+  if (!household) {
+    setAnalytics(null)
+    setRecords([])
+    setError('No household has been registered yet.')
+    setLoading(false)
+    return
+  }
 
-        if (households.length === 0) {
-          if (isMounted) {
-            setHousehold(null)
-            setAnalytics(null)
-            setRecords([])
-            setError('No household has been registered yet.')
-          }
-          return
-        }
+  let isMounted = true
 
-        // 2. Select the first registered household
-        const selectedHousehold = households[0]
+  async function loadDashboard() {
+    try {
+      setLoading(true)
+      setError('')
 
-        // 3. Retrieve consumption records and analytics together
-        const [
-          consumptionResponse,
-          analyticsResponse,
-        ] = await Promise.all([
-          getConsumption(selectedHousehold.household_id),
-          getAnalytics(selectedHousehold.household_id),
-        ])
+      const [
+        consumptionResponse,
+        analyticsResponse,
+      ] = await Promise.all([
+        getConsumption(household.household_id),
+        getAnalytics(household.household_id),
+      ])
 
-        // 4. Sort records chronologically
-        const sortedRecords = [
-          ...(consumptionResponse.records || []),
-        ].sort((a, b) =>
-          a.record_date.localeCompare(b.record_date)
-        )
+      const sortedRecords = [
+        ...(consumptionResponse.records || []),
+      ].sort((a, b) =>
+        a.record_date.localeCompare(b.record_date)
+      )
 
-        if (isMounted) {
-          setHousehold(selectedHousehold)
-          setAnalytics(analyticsResponse)
-          setRecords(sortedRecords)
-        }
+      if (isMounted) {
+        setAnalytics(analyticsResponse)
+        setRecords(sortedRecords)
+      }
 
-      } catch (err) {
-        if (isMounted) {
-          setError(
-            err.message || 'Unable to load dashboard data.'
-          )
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false)
-        }
+    } catch (err) {
+      if (isMounted) {
+        setError(err.message || 'Unable to load dashboard data.')
+      }
+    } finally {
+      if (isMounted) {
+        setLoading(false)
       }
     }
+  }
 
-    loadDashboard()
+  loadDashboard()
 
-    return () => {
-      isMounted = false
-    }
-  }, [])
+  return () => {
+    isMounted = false
+  }
+}, [household, loadingHousehold, householdError])
 
 // Register a new household
+
 async function handleHouseholdRegistration(event) {
   event.preventDefault()
 
@@ -134,8 +134,8 @@ async function handleHouseholdRegistration(event) {
     setHouseholdName('')
     setHouseholdSize('1')
 
-    // Reload the page to fetch the newly registered household
-    window.location.reload()
+    // Refresh the shared household context
+    await refreshHousehold()
 
   } catch (err) {
     setRegistrationError(
@@ -145,6 +145,7 @@ async function handleHouseholdRegistration(event) {
     setRegistering(false)
   }
 }
+
 
   // Loading state
   if (loading) {

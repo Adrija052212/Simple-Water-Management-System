@@ -5,6 +5,7 @@ import Consumption from './pages/Consumption'
 import Prediction from './pages/Prediction'
 import Optimization from './pages/Optimization'
 import Dashboard from './pages/Dashboard'
+import { HouseholdProvider } from './context/HouseholdContext'
 
 
 const navigation = [
@@ -132,7 +133,9 @@ function AppLayout() {
 function App() {
   return (
     <BrowserRouter>
-      <AppLayout />
+      <HouseholdProvider>
+        <AppLayout />
+      </HouseholdProvider>
     </BrowserRouter>
   )
 }
