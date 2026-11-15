@@ -20,6 +20,8 @@ app.register_blueprint(prediction_bp)
 app.register_blueprint(optimization_bp)
 app.register_blueprint(recommendation_bp)
 
+# Initialize database when the application starts
+initialize_database()
 
 @app.route("/", methods=["GET"])
 def home():
@@ -38,8 +40,4 @@ def health():
 
 
 if __name__ == "__main__":
-
-    # Initialize database before starting the server
-    initialize_database()
-
     app.run(debug=True, port=5000)
