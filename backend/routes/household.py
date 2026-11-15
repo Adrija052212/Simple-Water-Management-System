@@ -41,6 +41,17 @@ def create_household():
     connection = get_db_connection()
 
     try:
+        # Check whether a household is already registered
+        existing_household = connection.execute(
+            "SELECT household_id FROM households LIMIT 1"
+        ).fetchone()
+
+        if existing_household:
+            return jsonify({
+                "error": "A household is already registered. Only one household is allowed."
+            }), 409
+
+        # Register the household if none exists
         cursor = connection.execute(
             """
             INSERT INTO households (household_name, household_size)
@@ -85,6 +96,48 @@ def get_households():
         return jsonify({
             "total_households": len(result),
             "households": result
+        }), 200
+
+    finally:
+        connection.close()
+
+
+# TEMPORARY: Remove duplicate test household
+@household_bp.route("/api/households/cleanup", methods=["POST"])
+def cleanup_duplicate_household():
+
+    connection = get_db_connection()
+
+    try:
+        # Confirm that household ID 1 exists
+        primary = connection.execute(
+            "SELECT household_id FROM households WHERE household_id = 1"
+        ).fetchone()
+
+        if not primary:
+            return jsonify({
+                "error": "Primary household ID 1 was not found."
+            }), 404
+
+        # Check whether household ID 2 has consumption records
+        records = connection.execute(
+            "SELECT COUNT(*) AS total FROM consumption_records WHERE household_id = 2"
+        ).fetchone()["total"]
+
+        if records > 0:
+            return jsonify({
+                "error": "Household ID 2 has consumption records. Deletion cancelled."
+            }), 409
+
+        # Delete duplicate household ID 2
+        connection.execute(
+            "DELETE FROM households WHERE household_id = 2"
+        )
+
+        connection.commit()
+
+        return jsonify({
+            "message": "Duplicate household removed successfully."
         }), 200
 
     finally:
