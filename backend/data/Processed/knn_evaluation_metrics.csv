@@ -1,0 +1,5 @@
+Target,MAE,RMSE,R2
+Bathroom_Liters,14.54,19.17,0.9586
+Kitchen_Liters,6.1,7.72,0.7737
+Laundry_Liters,5.77,10.57,0.9668
+Gardening_Liters,5.07,10.04,0.9588
